@@ -9,7 +9,7 @@ import (
 
 // Database level modelling of ERC20 token event
 // Mongo DB entries
-type Erc20Event struct {
+type Erc20TransferEvent struct {
 	ID         primitive.ObjectID `json:"_id,omitempty" bson:"_id,omitempty"`
 	From       string             `json:"from,omitempty" bson:"from,omitempty"`
 	To         string             `json:"to,omitempty" bson:"to,omitempty"`
@@ -23,7 +23,8 @@ type Blocks struct {
 	StartBlock string             `json:"startblock,omitempty" bson:"from,omitempty"`
 }
 
-type TransferEvent struct {
+//struct types matching the types of the ERC-20 event Transfer
+type LogTransfer struct {
 	From   common.Address
 	To     common.Address
 	Tokens *big.Int
