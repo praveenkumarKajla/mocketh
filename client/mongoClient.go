@@ -3,9 +3,11 @@ package client
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"time"
 
+	"github.com/praveenkumarKajla/mocketh/config"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -13,6 +15,18 @@ import (
 type MongoClient struct {
 	connString string
 	client     *mongo.Client
+}
+
+var DBClient *MongoClient
+
+func init() {
+	mongoDBConnString := config.Config.GetString("mongoDBConnString")
+	mclient, err := NewMongoClient(mongoDBConnString)
+	if err != nil {
+		fmt.Println("client.NewMongoClient Error", err)
+		return
+	}
+	DBClient = mclient
 }
 
 func NewMongoClient(connString string) (*MongoClient, error) {
@@ -40,7 +54,7 @@ func (_mongoClient *MongoClient) GetCollection(databaseName string, collectionNa
 		return nil, errors.New("empty collectionName")
 	}
 
-	collection := _mongoClient.client.Database("myFirstDatabase3").Collection("BlockLog")
+	collection := _mongoClient.client.Database(databaseName).Collection(collectionName)
 	return collection, nil
 
 }

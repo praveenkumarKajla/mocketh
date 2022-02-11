@@ -7,6 +7,7 @@ import (
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/praveenkumarKajla/mocketh/config"
 )
 
 type ETHClient struct {
@@ -14,8 +15,20 @@ type ETHClient struct {
 	Client     *ethclient.Client
 }
 
+var EthClient *ETHClient
+
+func init() {
+	infuraConnString := config.Config.GetString("infuraConnString")
+	client, err := NewETHClient(infuraConnString)
+	if err != nil {
+		fmt.Println("client.NewETHClient Error", err)
+		return
+	}
+	EthClient = client
+}
+
 func NewETHClient(connString string) (*ETHClient, error) {
-	client, err := ethclient.Dial("https://mainnet.infura.io/v3/3e411f27aa87416885b43cdc9c7456b1")
+	client, err := ethclient.Dial(connString)
 	if err != nil {
 		return nil, err
 	}
@@ -24,6 +37,7 @@ func NewETHClient(connString string) (*ETHClient, error) {
 	return &ETHClient{connString: connString, Client: client}, nil
 }
 
+// FilterQuery between desired block range
 func (ethClient *ETHClient) FilterQuery(
 	startblock int,
 	endblock int64,
