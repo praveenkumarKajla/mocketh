@@ -3,11 +3,10 @@ package client
 import (
 	"context"
 	"errors"
-	"fmt"
-	"log"
 	"time"
 
 	"github.com/praveenkumarKajla/mocketh/config"
+	"github.com/sirupsen/logrus"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -23,7 +22,7 @@ func init() {
 	mongoDBConnString := config.Config.GetString("mongoDBConnString")
 	mclient, err := NewMongoClient(mongoDBConnString)
 	if err != nil {
-		fmt.Println("client.NewMongoClient Error", err)
+		logrus.Info("client.NewMongoClient Error", err)
 		return
 	}
 	DBClient = mclient
@@ -36,7 +35,7 @@ func NewMongoClient(connString string) (*MongoClient, error) {
 		connString,
 	))
 	if err != nil {
-		log.Fatal(err)
+		logrus.Fatal(err)
 	}
 	err = client.Ping(context.TODO(), nil)
 	if err != nil {
@@ -46,7 +45,9 @@ func NewMongoClient(connString string) (*MongoClient, error) {
 	return &MongoClient{connString: connString, client: client}, nil
 }
 
-func (_mongoClient *MongoClient) GetCollection(databaseName string, collectionName string) (*mongo.Collection, error) {
+// Get collection handle from name
+func (_mongoClient *MongoClient) GetCollection(collectionName string) (*mongo.Collection, error) {
+	databaseName := config.Config.GetString("databaseName")
 	if databaseName == "" {
 		return nil, errors.New("empty databaseName")
 	}
