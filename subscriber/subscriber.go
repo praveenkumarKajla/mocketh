@@ -2,9 +2,8 @@ package subscriber
 
 import (
 	"context"
-	"fmt"
 	"log"
-	"strconv"
+	"math/big"
 	"strings"
 	"time"
 
@@ -13,9 +12,14 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/praveenkumarKajla/mocketh/client"
 	"github.com/praveenkumarKajla/mocketh/models"
-	"github.com/praveenkumarKajla/mocketh/token"
-	"go.mongodb.org/mongo-driver/bson"
+	contract "github.com/praveenkumarKajla/mocketh/token"
+	"github.com/sirupsen/logrus"
 	"go.mongodb.org/mongo-driver/mongo"
+)
+
+// No. of blocks to poll logs at a time
+const (
+	blockIntervals = 100
 )
 
 type Erc20Subscriber struct {
@@ -26,8 +30,12 @@ type Erc20Subscriber struct {
 	collection      *mongo.Collection
 }
 
-func NewErc20Subscriber(ethClient *client.ETHClient, Name string, HexAddress string, collection *mongo.Collection) (*Erc20Subscriber, error) {
-	contractAddress := common.HexToAddress("0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174")
+func NewErc20Subscriber(
+	ethClient *client.ETHClient,
+	Name string,
+	contractAddress common.Address,
+	collection *mongo.Collection,
+) (*Erc20Subscriber, error) {
 
 	return &Erc20Subscriber{
 		LastRunAt:       time.Now(),
@@ -39,34 +47,37 @@ func NewErc20Subscriber(ethClient *client.ETHClient, Name string, HexAddress str
 
 }
 
-func (Subscriber *Erc20Subscriber) DoRun() {
-	ethclient := Subscriber.ethclient.Client
+func (Subscriber *Erc20Subscriber) DoRun(Erc20Token *models.ERC20) (*models.ERC20, error) {
+	logrus.Info("Running Subscriber")
+	ethclient := Subscriber.ethclient
 	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
 
-	var block models.Blocks
-	if err := Subscriber.collection.FindOne(ctx, bson.M{}).Decode(&block); err != nil {
-		log.Fatal(err)
+	var endBlock *big.Int
+	// if indexing this token for first time get the latest block
+	if Erc20Token.LastIndexedBlock != 0 {
+		endBlock = big.NewInt(Erc20Token.LastIndexedBlock)
+	} else {
+		lastBlock, err := Subscriber.ethclient.Client.BlockByNumber(ctx, nil)
+		if err != nil {
+			logrus.Fatal(err)
+		}
+		endBlock = lastBlock.Number()
 	}
-	startblock, _ := strconv.Atoi(block.StartBlock)
-	endblock, err := ethclient.HeaderByNumber(context.Background(), nil)
-	if err != nil {
-		log.Fatal(err)
-	}
-	endblockInt := endblock.Number.Int64()
-	fmt.Println(startblock, endblockInt)
 
+	startblock := big.NewInt(0).Sub(endBlock, big.NewInt(blockIntervals))
+	logrus.Info(startblock, endBlock)
 	// generate eth filterQuery to get logs between range of blocks
-	query := Subscriber.ethclient.FilterQuery(startblock, endblockInt, Subscriber.ContractAddress)
 
+	query := ethclient.FilterQuery(startblock, endBlock, Subscriber.ContractAddress)
 	// Query logs by filter Query
-	logs, err := ethclient.FilterLogs(context.Background(), query)
+	logs, err := ethclient.Client.FilterLogs(ctx, query)
 	if err != nil {
-		log.Fatal(err)
+		logrus.Fatal(err)
 	}
 	// parse the JSON abi
-	contractAbi, err := abi.JSON(strings.NewReader(string(token.TokenABI)))
+	contractAbi, err := abi.JSON(strings.NewReader(string(contract.ContractABI)))
 	if err != nil {
-		log.Fatal(err)
+		logrus.Fatal(err)
 	}
 
 	logTransferSig := []byte("Transfer(address,address,uint256)")
@@ -77,39 +88,85 @@ func (Subscriber *Erc20Subscriber) DoRun() {
 	for _, vLog := range logs {
 
 		switch vLog.Topics[0].Hex() {
+		// if need to get approval logs too add the approval sig hash
 		case logTransferSigHash.Hex():
-			fmt.Printf("Log Block Number: %d\n", vLog.BlockNumber)
-			fmt.Printf("Log Index: %d\n", vLog.Index)
-			fmt.Printf("Log Data: %d\n", vLog.Data)
-			fmt.Printf("Log Name: Transfer\n")
-
+			logrus.Infof("Log Index: %d\n", vLog.Index)
+			logrus.Infof("Log Data: %d\n", vLog.Data)
+			logrus.Infof("Log Name: Transfer\n")
 			var transferEvent models.LogTransfer
 
-			err := contractAbi.UnpackIntoInterface(&transferEvent, "Transfer", vLog.Data)
-			// val, err := contractAbi.Unpack("Transfer", vLog.Data)
-
+			err = contractAbi.UnpackIntoInterface(&transferEvent, "Transfer", vLog.Data)
+			logrus.Info("transferEventData : ", vLog.Data)
 			if err != nil {
-				log.Fatal(err)
+				logrus.Fatal(err)
+			}
+			for _, topic := range vLog.Topics {
+				logrus.Info(topic, topic.Hex())
 			}
 
 			transferEvent.From = common.HexToAddress(vLog.Topics[1].Hex())
 			transferEvent.To = common.HexToAddress(vLog.Topics[2].Hex())
 
 			event := &models.Erc20TransferEvent{
-				From:   transferEvent.From.Hex(),
-				To:     transferEvent.To.Hex(),
-				Tokens: transferEvent.Tokens.String(),
+				From:        transferEvent.From.Hex(),
+				To:          transferEvent.To.Hex(),
+				Tokens:      transferEvent.Value.String(),
+				BlockNumber: vLog.BlockNumber,
+				TxHash:      vLog.TxHash.Hex(),
 			}
 
-			result, _ := Subscriber.collection.InsertOne(ctx, event)
+			result, err := Subscriber.collection.InsertOne(ctx, event)
+			if err != nil {
+				logrus.Fatal(err)
+			}
 
-			fmt.Printf("From: %s\n", transferEvent.From.Hex())
-			fmt.Printf("To: %s\n", transferEvent.To.Hex())
-			fmt.Printf("Tokens: %s\n", transferEvent.Tokens.String())
-			fmt.Println("dbID ", result)
-			fmt.Printf("\n\n")
+			logrus.Info("dbID : event ", result)
+			// logrus.Infof("\n\n")
 
 		}
 
 	}
+	Erc20Token.LastIndexedBlock = endBlock.Int64()
+	return Erc20Token, nil
+}
+
+// handles the new transfer event fired and store them to db
+func (Subscriber *Erc20Subscriber) UpcomingEvents() (*models.ERC20, error) {
+	tc, err := contract.NewContract(Subscriber.ContractAddress, Subscriber.ethclient.WssClient)
+	if err != nil {
+		logrus.Fatalf("error connections to contract: %s", err.Error())
+	}
+
+	// Create transfers channel.
+	transfers := make(chan *contract.ContractTransfer)
+
+	// Subscribe to ethereum contract transfers event.
+	sub, err := tc.WatchTransfer(nil, transfers, nil, nil)
+	if err != nil {
+		logrus.Fatalf("error subcribe to event: %s", err.Error())
+	}
+
+	for {
+		select {
+		case err := <-sub.Err():
+			logrus.Fatalf(": %s", err.Error())
+		case t := <-transfers:
+			event := &models.Erc20TransferEvent{
+				From:        t.From.Hex(),
+				To:          t.To.Hex(),
+				Tokens:      t.Value.String(),
+				BlockNumber: t.Raw.BlockNumber,
+				TxHash:      t.Raw.TxHash.Hex(),
+			}
+
+			log.Println(event)
+			result, err := Subscriber.collection.InsertOne(context.Background(), event)
+			if err != nil {
+				logrus.Fatal(err)
+			}
+
+			logrus.Info(result)
+		}
+	}
+
 }
