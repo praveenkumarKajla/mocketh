@@ -130,7 +130,7 @@ func (Subscriber *Erc20Subscriber) DoRun(Erc20Token *models.ERC20) (*models.ERC2
 		}
 
 	}
-	Erc20Token.LastIndexedBlock = endBlock.Int64()
+	Erc20Token.LastIndexedBlock = startblock.Int64()
 	return Erc20Token, nil
 }
 
