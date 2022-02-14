@@ -44,7 +44,6 @@ func NewETHClient(connString string, wssConnString string) (*ETHClient, error) {
 		return nil, err
 	}
 
-	defer wssClient.Close()
 	logrus.Info("we have a connection")
 	return &ETHClient{connString: connString, Client: client, WssClient: wssClient}, nil
 }
