@@ -107,12 +107,16 @@ func (Subscriber *Erc20Subscriber) DoRun(Erc20Token *models.ERC20) (*models.ERC2
 			transferEvent.From = common.HexToAddress(vLog.Topics[1].Hex())
 			transferEvent.To = common.HexToAddress(vLog.Topics[2].Hex())
 
+			blockIndex := uint64(vLog.Index)
+
 			event := &models.Erc20TransferEvent{
-				From:        transferEvent.From.Hex(),
-				To:          transferEvent.To.Hex(),
-				Tokens:      transferEvent.Value.String(),
-				BlockNumber: vLog.BlockNumber,
-				TxHash:      vLog.TxHash.Hex(),
+				From:          transferEvent.From.Hex(),
+				To:            transferEvent.To.Hex(),
+				Tokens:        transferEvent.Value.String(),
+				BlockNumber:   vLog.BlockNumber,
+				TxHash:        vLog.TxHash.Hex(),
+				Address:       vLog.Address.Hex(),
+				BlockLogIndex: blockIndex,
 			}
 
 			result, err := Subscriber.collection.InsertOne(ctx, event)

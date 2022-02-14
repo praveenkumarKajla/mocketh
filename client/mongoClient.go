@@ -3,12 +3,22 @@ package client
 import (
 	"context"
 	"errors"
+	"sync"
 	"time"
 
 	"github.com/praveenkumarKajla/mocketh/config"
 	"github.com/sirupsen/logrus"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+)
+
+const (
+	transferCollection = "transfers"
+)
+
+var (
+	onlyOnce sync.Once
 )
 
 type MongoClient struct {
@@ -43,6 +53,31 @@ func NewMongoClient(connString string) (*MongoClient, error) {
 	}
 
 	return &MongoClient{connString: connString, client: client}, nil
+}
+
+func (_mongoClient *MongoClient) GetTransferCollection() (*mongo.Collection, error) {
+
+	collectionName := transferCollection
+	collection, err := _mongoClient.GetCollection(collectionName)
+	if err != nil {
+		return nil, err
+	}
+	onlyOnce.Do(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		mod := mongo.IndexModel{
+			Keys: bson.M{
+				"block_number": -1, // index in ascending order
+				"block_index":  -1,
+			}, Options: options.Index().SetUnique(true),
+		}
+		_, err = collection.Indexes().CreateOne(ctx, mod)
+		if err != nil {
+			logrus.Error(err)
+		}
+	})
+
+	return _mongoClient.GetCollection(collectionName)
 }
 
 // Get collection handle from name
