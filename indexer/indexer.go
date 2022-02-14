@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/praveenkumarKajla/mocketh/client"
 	"github.com/praveenkumarKajla/mocketh/config"
 	"github.com/praveenkumarKajla/mocketh/models"
@@ -68,27 +67,9 @@ func (idx *Indexer) Erc20TokensSubscriber(ctx context.Context, addresses map[str
 	})
 	// check if contract address in config exist in db
 	for name, addr := range addresses {
-		if !common.IsHexAddress(addr) {
-			return ErrInvalidAddress
-		}
-		address := common.HexToAddress(addr)
-		val, err := idx.Account.FindERC20(ctx, address)
-		// The ERC20 exists, no need to insert again
-		if err == nil {
-			logrus.Info("Erc20 Exist ", val)
-			continue
-		}
-
-		erc20, err := client.GetERC20(ctx, address, name, 0)
+		err := idx.GetOrAddErc20(ctx, addr, name)
 		if err != nil {
-			log.Error("Failed to get ERC20", "addr", addr, "err", err)
-			return err
-		}
-		//  add the token to DB
-		_, err = idx.Account.InsertERC20(ctx, erc20)
-		if err != nil {
-			log.Error("Failed to insert ERC20", "addr", addr, "err", err)
-			return err
+			logrus.Error(err)
 		}
 
 	}
@@ -166,6 +147,32 @@ func (idx *Indexer) DoRun() error {
 			return err
 		}
 
+	}
+	return nil
+}
+
+func (idx *Indexer) GetOrAddErc20(ctx context.Context, addr string, name string) error {
+	if !common.IsHexAddress(addr) {
+		return ErrInvalidAddress
+	}
+	address := common.HexToAddress(addr)
+	val, err := idx.Account.FindERC20(ctx, address)
+	// The ERC20 exists, no need to insert again
+	if err == nil {
+		logrus.Info("Erc20 Exist ", val)
+		return errors.New("erc20 Already Exist")
+	}
+
+	erc20, err := client.GetERC20(ctx, address, name, 0)
+	if err != nil {
+		logrus.Error("Failed to get ERC20", "addr", addr, "err", err)
+		return err
+	}
+	//  add the token to DB
+	_, err = idx.Account.InsertERC20(ctx, erc20)
+	if err != nil {
+		logrus.Error("Failed to insert ERC20", "addr", addr, "err", err)
+		return err
 	}
 	return nil
 }
