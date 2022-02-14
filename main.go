@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/praveenkumarKajla/mocketh/indexer"
+	"github.com/praveenkumarKajla/mocketh/models"
 	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 )
@@ -54,7 +56,7 @@ func main() {
 
 	// Initialize ERC20 tokens for given addresses
 	if err := indexService.Erc20TokensSubscriber(ctx, erc20Addresses); err != nil {
-		log.Error("Fail to subscribe ERC20Tokens and write to database", "err", err)
+		logrus.Error("Fail to subscribe ERC20Tokens and write to database", "err", err)
 		return
 	}
 	//  start the periodic task
@@ -71,17 +73,23 @@ func main() {
 
 func addAddress(response http.ResponseWriter, request *http.Request) {
 	response.Header().Add("content-type", "application/json")
-	code := request.URL.Query().Get("address")
-	if code == "" {
+	var erc20 models.AccountPayload
+	logrus.Info(json.NewDecoder(request.Body))
+	err := json.NewDecoder(request.Body).Decode(&erc20)
+	if err != nil {
+		response.WriteHeader(http.StatusBadRequest)
+		response.Write([]byte(`{"message":"failure"}`))
 		return
 	}
-	// erc20, err := client.GetERC20(ctx, address, name)
-	// if err != nil {
-	// 	log.Error("Failed to get ERC20", "addr", addr, "err", err)
-	// 	return err
-	// }
-	// _, err = idx.Account.InsertERC20(ctx, erc20)
-	// indexerInstance.Account.InsertERC20()
+	logrus.Info(erc20)
+
+	err = indexerInstance.GetOrAddErc20(context.Background(), erc20.Address, erc20.Name)
+
+	if err != nil {
+		response.WriteHeader(http.StatusInternalServerError)
+		response.Write([]byte(err.Error()))
+		return
+	}
 
 	response.WriteHeader(http.StatusOK)
 	response.Write([]byte(`{"message":"success"}`))

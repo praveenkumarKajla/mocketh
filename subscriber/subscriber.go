@@ -143,7 +143,7 @@ func (Subscriber *Erc20Subscriber) UpcomingEvents() (*models.ERC20, error) {
 	// Subscribe to ethereum contract transfers event.
 	sub, err := tc.WatchTransfer(nil, transfers, nil, nil)
 	if err != nil {
-		logrus.Fatalf("error subcribe to event: %s", err.Error())
+		logrus.Fatalf("error subscribing to event: %s", err.Error())
 	}
 
 	for {

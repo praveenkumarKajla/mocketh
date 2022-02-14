@@ -2,3 +2,4 @@ mongoDBConnString: mongodb://mongoadmin:secret@localhost:27888/?authSource=admin
 infuraConnString: https://mainnet.infura.io/v3/3e411f27aa87416885b43cdc9c7456b1
 infuraConnStringWss: wss://mainnet.infura.io/ws/v3/3e411f27aa87416885b43cdc9c7456b1
 databaseName: mocketh_test_db
+fromBlock: 1
