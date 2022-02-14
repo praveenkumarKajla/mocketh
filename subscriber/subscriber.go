@@ -155,12 +155,15 @@ func (Subscriber *Erc20Subscriber) UpcomingEvents() (*models.ERC20, error) {
 		case err := <-sub.Err():
 			logrus.Fatalf(": %s", err.Error())
 		case t := <-transfers:
+			blockIndex := uint64(t.Raw.Index)
 			event := &models.Erc20TransferEvent{
-				From:        t.From.Hex(),
-				To:          t.To.Hex(),
-				Tokens:      t.Value.String(),
-				BlockNumber: t.Raw.BlockNumber,
-				TxHash:      t.Raw.TxHash.Hex(),
+				From:          t.From.Hex(),
+				To:            t.To.Hex(),
+				Tokens:        t.Value.String(),
+				BlockNumber:   t.Raw.BlockNumber,
+				TxHash:        t.Raw.TxHash.Hex(),
+				Address:       t.Raw.Address.Hex(),
+				BlockLogIndex: blockIndex,
 			}
 
 			log.Println(event)
